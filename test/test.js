@@ -1,9 +1,14 @@
+/** @typedef { import("rollup").Plugin } Plugin */
+/** @typedef { import("..").RollupTypescriptOptions } RollupTypescriptOptions */
+
 const assert = require( 'assert' );
 const rollup = require( 'rollup' );
+/** @type { (options?: RollupTypescriptOptions ) => Plugin } */
 const typescript = require( '..' );
 const path = require('path');
 const commonjs = require('rollup-plugin-commonjs');
 
+/** @param { RollupTypescriptOptions } [options] */
 async function bundle (main, options) {
 	return rollup.rollup({
 		input: main,
@@ -17,6 +22,7 @@ async function getCodeFromBundle (bundle) {
 	return getOutputFromGenerated(await bundle.generate({ format: 'esm' })).code;
 }
 
+/** @param { RollupTypescriptOptions } [options] */
 async function getCode ( main, options ) {
 	return getCodeFromBundle(await bundle(main, options));
 }

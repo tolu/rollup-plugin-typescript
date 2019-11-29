@@ -8,6 +8,15 @@ import resolveHost from './resolveHost';
 
 const TSLIB_ID = '\0tslib';
 
+/**
+ * @typedef { import("..").RollupTypescriptOptions } RollupTypescriptOptions
+ * @typedef { import("rollup").Plugin } Plugin
+ */
+
+/**
+ * @param { RollupTypescriptOptions } options
+ * @returns { Plugin }
+ * */
 export default function typescript ( options = {} ) {
 	options = Object.assign( {}, options );
 
@@ -19,7 +28,6 @@ export default function typescript ( options = {} ) {
 	delete options.exclude;
 
 	// Allow users to override the TypeScript version used for transpilation and tslib version used for helpers.
-	/** @type {import('typescript')} */
 	const typescript = options.typescript || ts;
 	const tslib = options.tslib ||
 		fs.readFileSync(resolveId.sync('tslib/tslib.es6.js', { basedir: __dirname }), 'utf-8' );
@@ -47,28 +55,34 @@ export default function typescript ( options = {} ) {
 		throw new Error( `rollup-plugin-typescript: The module kind should be 'ES2015' or 'ESNext, found: '${ options.module }'` );
 	}
 
-	const parsed = typescript.convertCompilerOptionsFromJson( options, process.cwd() );
-
-	if ( parsed.errors.length ) {
-		parsed.errors.forEach( error => console.error( `rollup-plugin-typescript: ${ error.messageText }` ) );
-
-		throw new Error( `rollup-plugin-typescript: Couldn't process compiler options` );
-	}
-
-	// let typescript load inheritance chain if there are base configs
-	const extendedConfig = !tsConfig.extends ?
-		null :
-		typescript.parseJsonConfigFileContent(tsConfig, typescript.sys, process.cwd(), parsed.options);
-	if (extendedConfig && extendedConfig.errors.length) {
-		extendedConfig.errors.forEach( error => console.error( `rollup-plugin-typescript: ${ error.messageText }` ) );
-
-		throw new Error( `rollup-plugin-typescript: Couldn't process compiler options` );
-	}
-
-	const compilerOptions = extendedConfig ? extendedConfig.options : parsed.options;
+	/** @type { import('typescript').CompilerOptions } */
+	let compilerOptions; // populate in buildStart hook
 
 	return {
 		name: 'typescript',
+
+		buildStart () {
+			// Get the parsed compiler options
+			const parsed = typescript.convertCompilerOptionsFromJson( options, process.cwd() );
+
+			if ( parsed.errors.length ) {
+				parsed.errors.forEach( error => this.warn( `rollup-plugin-typescript: ${ error.messageText }` ) );
+
+				this.error( `rollup-plugin-typescript: Couldn't process compiler options` );
+			}
+
+			// let typescript load inheritance chain if there are base configs
+			const extendedConfig = !tsConfig.extends ?
+				null :
+				typescript.parseJsonConfigFileContent(tsConfig, typescript.sys, process.cwd(), parsed.options);
+			if (extendedConfig && extendedConfig.errors.length) {
+				extendedConfig.errors.forEach( error => this.warn( `rollup-plugin-typescript: ${ error.messageText }` ) );
+
+				this.error( `rollup-plugin-typescript: Couldn't process compiler options` );
+			}
+
+			compilerOptions = extendedConfig ? extendedConfig.options : parsed.options;
+		},
 
 		resolveId ( importee, importer ) {
 			if ( importee === 'tslib' ) {
@@ -117,7 +131,7 @@ export default function typescript ( options = {} ) {
 
 				if ( diagnostic.file ) {
 					const { line, character } = diagnostic.file.getLineAndCharacterOfPosition( diagnostic.start );
-
+					
 					console.error( `${diagnostic.file.fileName}(${line + 1},${character + 1}): error TS${diagnostic.code}: ${message}` );
 				} else {
 					console.error( `Error: ${message}` );
